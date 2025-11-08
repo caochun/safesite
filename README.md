@@ -61,6 +61,25 @@
    - `--buffer-seconds`、`--record-seconds` 控制回溯与触发后保存时长。
    - `--bitrate` 设置录制编码码率（kbps）。
 
+### Python 参考版本
+如果需要快速对照或调试，也可以使用旧的 Python 实现：
+
+1. 安装依赖
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
+2. 运行脚本
+   ```bash
+   python scripts/object_detection.py \
+     --model models/yolov8n.onnx \
+     --class-id 41 \
+     --confidence 0.25 \
+     --input-size 640 640
+   ```
+   其功能与 C++ 版本相同，可用于对比 debug。
+
 ## 注意事项
 - 默认为 `cup`（COCO `class_id=41`），需要根据实际模型类别调整。
 - 使用 `x264enc` 进行 H.264 编码，如需硬件或其他编码器，可修改源码中录制管线。

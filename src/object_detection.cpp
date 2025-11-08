@@ -7,6 +7,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include <chrono>
 #include <deque>
 #include <filesystem>
 #include <iostream>
@@ -192,42 +193,54 @@ private:
         cv::dnn::blobFromImage(frame, blob, 1.0 / 255.0, inputSize_, cv::Scalar(), true, false);
         net_.setInput(blob);
         cv::Mat outputs = net_.forward();
-        outputs = outputs.squeeze();
 
-        cv::Mat outputMat = outputs;
-        if (outputMat.dims == 3) {
-            outputMat = outputMat.reshape(1, outputMat.size[1]);
+        const int dims = outputs.dims;
+        if (dims != 3 && dims != 4) {
+            return {};
         }
+
+        const int64_t numProposals = (dims == 3) ? outputs.size[2] : outputs.size[1];
+        const int64_t numAttributes = (dims == 3) ? outputs.size[1] : outputs.size[2];
+        const int numClasses = static_cast<int>(numAttributes - 5);
 
         std::vector<cv::Rect> boxes;
         std::vector<float> confidences;
         std::vector<int> classIds;
 
-        for (int i = 0; i < outputMat.rows; ++i) {
-            const float* data = outputMat.ptr<float>(i);
-            float objectness = data[4];
+        for (int64_t i = 0; i < numProposals; ++i) {
+            float x = outputs.at<float>(0, 0, i);
+            float y = outputs.at<float>(0, 1, i);
+            float w = outputs.at<float>(0, 2, i);
+            float h = outputs.at<float>(0, 3, i);
+            float objectness = outputs.at<float>(0, 4, i);
             if (objectness < confidence_) {
                 continue;
             }
 
-            cv::Mat scores = outputMat.row(i).colRange(5, outputMat.cols);
-            cv::Point classIdPoint;
-            double maxClassScore;
-            cv::minMaxLoc(scores, nullptr, &maxClassScore, nullptr, &classIdPoint);
-            float confidence = objectness * static_cast<float>(maxClassScore);
+            int bestClass = -1;
+            float bestClassScore = 0.0f;
+            for (int c = 0; c < numClasses; ++c) {
+                float score = outputs.at<float>(0, static_cast<int>(5 + c), i);
+                if (score > bestClassScore) {
+                    bestClassScore = score;
+                    bestClass = c;
+                }
+            }
+
+            float confidence = objectness * bestClassScore;
             if (confidence < confidence_) {
                 continue;
             }
 
-            int classId = classIdPoint.x;
-            float cx = data[0] * frame.cols;
-            float cy = data[1] * frame.rows;
-            float w = data[2] * frame.cols;
-            float h = data[3] * frame.rows;
-            int left = static_cast<int>(std::round(cx - w / 2));
-            int top = static_cast<int>(std::round(cy - h / 2));
-            int width = static_cast<int>(std::round(w));
-            int height = static_cast<int>(std::round(h));
+            int classId = bestClass;
+            float cx = x * frame.cols;
+            float cy = y * frame.rows;
+            float boxW = w * frame.cols;
+            float boxH = h * frame.rows;
+            int left = static_cast<int>(std::round(cx - boxW / 2));
+            int top = static_cast<int>(std::round(cy - boxH / 2));
+            int width = static_cast<int>(std::round(boxW));
+            int height = static_cast<int>(std::round(boxH));
             if (width <= 0 || height <= 0) {
                 continue;
             }
@@ -441,11 +454,11 @@ int main(int argc, char** argv) {
         std::optional<GstClockTime> recordingEndPts;
 
         auto startRecording = [&](GstClockTime pts) {
-            std::string timestamp = cv::getTickCount() ? cv::format("%0.0f", cv::getTickCount()) : "0";
-            std::time_t now = std::time(nullptr);
-            char buf[32];
-            std::strftime(buf, sizeof(buf), "%Y%m%d-%H%M%S", std::localtime(&now));
-            std::filesystem::path clipPath = opts.outputDir / ("clip_" + std::string(buf) + ".mp4");
+        auto now = std::chrono::system_clock::now();
+        std::time_t nowTime = std::chrono::system_clock::to_time_t(now);
+        char buf[32];
+        std::strftime(buf, sizeof(buf), "%Y%m%d-%H%M%S", std::localtime(&nowTime));
+        std::filesystem::path clipPath = opts.outputDir / ("clip_" + std::string(buf) + ".mp4");
             std::cout << "[record] Starting capture to " << clipPath << "\n";
             recordingSink = std::make_unique<RecordingSink>(opts.width, opts.height, opts.framerate, opts.bitrateKbps, clipPath);
 
@@ -462,8 +475,10 @@ int main(int argc, char** argv) {
 
         bool running = true;
         while (running) {
+            std::cout << "[loop] waiting for sample..." << std::endl;
             GstSample* sample = gst_app_sink_try_pull_sample(appsink, GST_SECOND / 5);
             if (!sample) {
+                std::cout << "[loop] no sample pulled within timeout" << std::endl;
                 GstMessage* msg = gst_bus_timed_pop_filtered(bus, 0, static_cast<GstMessageType>(GST_MESSAGE_ERROR | GST_MESSAGE_EOS));
                 if (msg) {
                     switch (GST_MESSAGE_TYPE(msg)) {
@@ -498,6 +513,7 @@ int main(int argc, char** argv) {
             cv::Mat frame = sample_to_mat(sample, pts);
             gst_sample_unref(sample);
             if (frame.empty()) {
+                std::cout << "[loop] empty frame" << std::endl;
                 continue;
             }
 
@@ -509,6 +525,9 @@ int main(int argc, char** argv) {
             prebuffer.emplace_back(pts, frame);
 
             std::vector<Detection> detections = detector.detect(frame);
+            if (detections.empty()) {
+                std::cout << "[loop] no detections on this frame" << std::endl;
+            }
             bool triggered = false;
             for (const auto& detection : detections) {
                 std::cout << "Detection: class_id=" << detection.classId
