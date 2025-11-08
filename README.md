@@ -7,46 +7,44 @@
 
 ## 快速开始
 
-1. 准备环境
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt  # 如果没有 requirements.txt，请安装 opencv-python numpy pygobject
-   ```
-
-   - **macOS**（Homebrew）：
+1. 安装依赖
+   - **macOS（Homebrew）**
      ```bash
-     brew install gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-libav pygobject3 gtk4
+     brew install cmake opencv gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-libav
      ```
 
-   - **Ubuntu / Debian 系列**：
+   - **Ubuntu / Debian 系列**
      ```bash
      sudo apt update
      sudo apt install \
+       build-essential cmake pkg-config \
+       libopencv-dev \
        gstreamer1.0-tools \
        gstreamer1.0-plugins-base \
        gstreamer1.0-plugins-good \
        gstreamer1.0-plugins-bad \
        gstreamer1.0-plugins-ugly \
        gstreamer1.0-libav \
-       python3-gi \
-       gir1.2-gstreamer-1.0 \
-       gir1.2-gtk-3.0 \
-       libglib2.0-dev
+       libgstreamer1.0-dev \
+       libgstreamer-plugins-base1.0-dev
      ```
-     根据需求可追加硬件相关插件（如 VAAPI、NVIDIA）。
-   ```
+     根据硬件需求追加 VAAPI、NVIDIA 或 Rockchip 相关插件。
 
 2. 下载 YOLOv8n ONNX 模型  
-   使用 Hugging Face 提供的权重文件：
+   使用 Hugging Face 提供的权重文件（需先 `mkdir -p models`）：
    ```
    https://huggingface.co/SpotLab/YOLOv8Detection/resolve/3005c6751fb19cdeb6b10c066185908faf66a097/yolov8n.onnx
    ```
-   将文件放置到 `models/yolov8n.onnx`。
 
-3. 运行脚本
+3. 构建原生应用
    ```bash
-   python scripts/object_detection.py \
+   cmake -S . -B build
+   cmake --build build
+   ```
+
+4. 运行示例
+   ```bash
+   ./build/object_detection \
      --model models/yolov8n.onnx \
      --class-id 41 \
      --confidence 0.25 \
@@ -54,19 +52,20 @@
      --buffer-seconds 3 \
      --record-seconds 3
    ```
-   - 触发检测时会在 `output_clips/` 生成包含触发前后视频片段的 MP4。
-   - 如果不带参数运行脚本，会自动打印使用帮助。
+   - 触发检测时会在 `output_clips/` 生成包含触发前后画面的 MP4 文件。
+   - 不带参数执行会打印使用说明。
 
-4. 常见参数
-   - `--device` 指定摄像头设备（如 `/dev/video0` 或 `0`）。
-   - `--source-element` 自定义 GStreamer 源元素。
-   - `--buffer-seconds`、`--record-seconds` 控制回溯和触发后录像时长。
-   - `--bitrate` 设置输出视频编码码率（kbps）。
+5. 常见参数
+   - `--device` 指定摄像头设备（如 `/dev/video0`、`0`）。
+   - `--source-element` 自定义 GStreamer 源元素（如 RTSP、RTMP）。
+   - `--buffer-seconds`、`--record-seconds` 控制回溯与触发后保存时长。
+   - `--bitrate` 设置录制编码码率（kbps）。
 
 ## 注意事项
 - 默认为 `cup`（COCO `class_id=41`），需要根据实际模型类别调整。
-- `models/` 与 `output_clips/` 已在 `.gitignore` 中忽略，无法直接上传到仓库。
-- 若 `gi` 或 GStreamer 库缺失，请先安装对应的系统依赖。
+- 使用 `x264enc` 进行 H.264 编码，如需硬件或其他编码器，可修改源码中录制管线。
+- `models/` 与 `output_clips/` 已在 `.gitignore` 中忽略，需自行创建相应目录。
+- 构建前请确保系统已安装 GStreamer/OpenCV 开发包以及 `pkg-config`。
 
 ## 参考链接
 - YOLOv8n ONNX 下载：[SpotLab/YOLOv8Detection](https://huggingface.co/SpotLab/YOLOv8Detection/resolve/3005c6751fb19cdeb6b10c066185908faf66a097/yolov8n.onnx)

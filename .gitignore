@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+
+.venv/
+venv/
+
+models/
+output_clips/
+
+.DS_Store
+
+build/
+
