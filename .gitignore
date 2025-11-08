@@ -1,0 +1,16 @@
+# Generated artifacts
+__pycache__/
+*.pyc
+
+# Local virtual environments
+.venv/
+venv/
+
+# Model weights and downloaded assets
+models/
+
+# Captured video clips
+output_clips/
+
+# macOS metadata
+.DS_Store
