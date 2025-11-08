@@ -2,6 +2,9 @@
 
 本项目演示如何使用 GStreamer 采集摄像头画面，结合 OpenCV DNN 推理 YOLOv8n 模型，实现茶杯（COCO `class_id=41`）检测，并在触发时回溯保存前三秒的视频片段。
 
+> 💡 **Rockchip 平台提示**  
+> RK3588 等 SoC 内置基于 MPP 的 GStreamer 插件（如 `mppvideodec`、`mpph264enc`、`rkximagesink`、`rkisp`），可提供硬件编解码、零拷贝渲染与 ISP 能力。建议直接使用 Rockchip 官方 SDK/镜像中的 `gstreamer-rockchip` 套件，并通过 `gst-inspect-1.0` 检查插件和驱动是否正确加载。
+
 ## 快速开始
 
 1. 准备环境
@@ -9,7 +12,29 @@
    python3 -m venv .venv
    source .venv/bin/activate
    pip install -r requirements.txt  # 如果没有 requirements.txt，请安装 opencv-python numpy pygobject
-   brew install gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-libav pygobject3 gtk4  # macOS 示例
+   ```
+
+   - **macOS**（Homebrew）：
+     ```bash
+     brew install gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-libav pygobject3 gtk4
+     ```
+
+   - **Ubuntu / Debian 系列**：
+     ```bash
+     sudo apt update
+     sudo apt install \
+       gstreamer1.0-tools \
+       gstreamer1.0-plugins-base \
+       gstreamer1.0-plugins-good \
+       gstreamer1.0-plugins-bad \
+       gstreamer1.0-plugins-ugly \
+       gstreamer1.0-libav \
+       python3-gi \
+       gir1.2-gstreamer-1.0 \
+       gir1.2-gtk-3.0 \
+       libglib2.0-dev
+     ```
+     根据需求可追加硬件相关插件（如 VAAPI、NVIDIA）。
    ```
 
 2. 下载 YOLOv8n ONNX 模型  
